@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+pycryptodome
+protobuf
+protobuf-decoder
+psutil
+PyJWT
