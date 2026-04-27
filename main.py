@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # DÀN BOT PHÔNG BẠT - RÚT GỌN SIÊU MƯỢT (1 LỆNH PB & INV)
 import os, sys, json, time, re, asyncio, random, traceback
-import subprocess
 from qdz import *
 from qdz2 import *
 from Crypto.Cipher import AES
@@ -37,7 +36,10 @@ evo_emotes = {
     "15": "909038012",  # G18
     "16": "909045001",  # Parafal
     "17": "909049010",  # P90
-    "18": "909051003"   # m60
+    "18": "909033002",  #mp5
+    "19": "909035012",  #an94
+    "20": "909037011",  #nắm đấm
+    "21": "909051003"   # m60
 }
 
 # Update đúng list Bundle ID bạn cấp
@@ -52,7 +54,8 @@ evo_bundles = [
     914047002,  # cucquang / aurora
     914048001,  # atchubai / midnight
     914050001,  # itachi
-    914051001   # mongmo / dreamspace
+    914051001,   # mongmo / dreamspace
+    914053001    #new
 ]
 
 # ============================================================
@@ -83,6 +86,10 @@ class AccountSession:
         
         self.team_joined_event = asyncio.Event()
         self.kicked_event = asyncio.Event()
+
+        self._online_task = None
+        self._chat_task = None
+        self._keepalive_task = None
 
 ACCOUNTS = []
 
@@ -235,7 +242,9 @@ async def KeepAlive_Account(session: AccountSession):
                     ping_packet = await GeT_Status(int(session.bot_uid), session.key, session.iv)
                     session.online_writer.write(ping_packet)
                     await session.online_writer.drain()
-        except:
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             pass
         await asyncio.sleep(45)
 
@@ -308,7 +317,9 @@ async def TcPOnLine_Account(session: AccountSession, ip, port, AutHToKen, reconn
             session.online_writer.close()
             await session.online_writer.wait_closed()
             session.online_writer = None
-        except:
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             pass
         await asyncio.sleep(reconnect_delay)
 
@@ -331,7 +342,9 @@ async def TcPChaT_Account(session: AccountSession, ip, port, AutHToKen, LoGinDaT
             session.whisper_writer.close()
             await session.whisper_writer.wait_closed()
             session.whisper_writer = None
-        except:
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             pass
         await asyncio.sleep(reconnect_delay)
 
@@ -512,9 +525,14 @@ async def _try_login_once(session: AccountSession):
     AutHToKen = await xAuThSTarTuP(int(TarGeT), session.token, int(timestamp), session.key, session.iv)
     ready_event = asyncio.Event()
 
-    asyncio.create_task(TcPChaT_Account(session, chat_ip, chat_port, AutHToKen, login_data, ready_event))
-    asyncio.create_task(TcPOnLine_Account(session, onl_ip, onl_port, AutHToKen))
-    asyncio.create_task(KeepAlive_Account(session))
+    # Cancel old background tasks before creating new ones (prevents duplicate loops)
+    for old_attr in ('_chat_task', '_online_task', '_keepalive_task'):
+        old = getattr(session, old_attr, None)
+        if old and not old.done():
+            old.cancel()
+    session._chat_task = asyncio.create_task(TcPChaT_Account(session, chat_ip, chat_port, AutHToKen, login_data, ready_event))
+    session._online_task = asyncio.create_task(TcPOnLine_Account(session, onl_ip, onl_port, AutHToKen))
+    session._keepalive_task = asyncio.create_task(KeepAlive_Account(session))
 
     try:
         await asyncio.wait_for(ready_event.wait(), timeout=15.0)
@@ -661,40 +679,4 @@ async def pb_endpoint(
     return {"status": "success", "task": "pb_multiple_uids"}
 
 if __name__ == "__main__":
-    # Supervisor restart: clean reboot every 12h, wait 5m, start fresh.
-    if os.environ.get("QDZ_CHILD", "") == "1":
-        uvicorn.run(app, host="127.0.0.1", port=8001)
-    else:
-        restart_every_seconds = 12 * 60 * 60
-        cool_down_seconds = 5 * 60
-        env = os.environ.copy()
-        env["QDZ_CHILD"] = "1"
-
-        creationflags = 0
-        if os.name == "nt" and hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
-            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-
-        while True:
-            p = subprocess.Popen(
-                [sys.executable, __file__],
-                env=env,
-                creationflags=creationflags,
-                cwd=script_dir,
-            )
-            try:
-                p.wait(timeout=restart_every_seconds)
-            except subprocess.TimeoutExpired:
-                try:
-                    p.terminate()
-                except Exception:
-                    pass
-                try:
-                    p.wait(timeout=30)
-                except Exception:
-                    try:
-                        p.kill()
-                    except Exception:
-                        pass
-
-            time.sleep(cool_down_seconds)
+    uvicorn.run(app, host="127.0.0.1", port=8001)
