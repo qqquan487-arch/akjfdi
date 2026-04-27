@@ -441,7 +441,7 @@ async def execute_pb_task(session: AccountSession, teamcode: str, target_uids: l
                         session.online_writer.write(pkt)
                         await session.online_writer.drain()
                 except: pass
-            await asyncio.sleep(9)
+            await asyncio.sleep(8.5)
 
     except Exception as e:
         print(f"Lỗi PB: {e}")
@@ -674,7 +674,7 @@ async def pb_endpoint(
     
     asyncio.create_task(asyncio.wait_for(
         execute_pb_task(bot, teamcode, target_uids), 
-        timeout=150.0
+        timeout=200.0
     ))
     return {"status": "success", "task": "pb_multiple_uids"}
 
